@@ -1,1 +1,90 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scanner - PM Record</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    
+    <style>
+        :root {
+            --bg: #e6edf5;
+            --clay-blue: #BCE2FC;
+            --text-main: #61738c;
+            --border-color: #c5d0e0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Kanit', sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 15px 10px; color: var(--text-main); }
+        .app-container { max-width: 400px; width: 100%; }
+        .top-card { background: #ffffff; border-radius: 25px; padding: 25px; box-shadow: 10px 10px 20px #c5d0e0, -10px -10px 20px #ffffff; text-align: center; }
+        h1 { font-size: 22px; font-weight: 600; color: #5A85A3; margin-bottom: 5px; }
+        p { font-size: 14px; color: #8397af; margin-bottom: 20px; }
+        
+        #reader { width: 100%; border: 2px dashed var(--border-color); border-radius: 12px; overflow: hidden; margin-bottom: 20px; background: #000; }
+        
+        .btn-cancel { background-color: var(--clay-blue); color: #5A85A3; box-shadow: 6px 6px 12px #A6C8E0, -6px -6px 12px #D2FCFF; border: none; border-radius: 20px; width: 100%; padding: 14px; font-size: 15px; font-weight: 600; font-family: 'Kanit', sans-serif; cursor: pointer; transition: 0.2s; }
+        .btn-cancel:active { transform: scale(0.97); }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="top-card">
+            <h1>📷 สแกนข้อมูล PM</h1>
+            <p>สแกน QR Code หรือ Barcode ของ Feeder</p>
+            
+            <div id="reader"></div>
+            
+            <button type="button" id="cancelBtn" class="btn-cancel">กลับไปหน้าหลัก</button>
+        </div>
+    </div>
 
+    <script>
+        // ⚠️ เอาลิงก์ Web App ของโปรเจกต์ PM Record มาใส่ที่นี่
+        const GAS_PM_WEB_APP_URL = "YOUR_PM_RECORD_WEB_APP_URL"; 
+        
+        let html5QrCode;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            html5QrCode = new Html5Qrcode("reader");
+            startScanner();
+        });
+        
+        document.getElementById('cancelBtn').addEventListener('click', () => {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                    window.location.href = GAS_PM_WEB_APP_URL; 
+                }).catch(err => {
+                    window.location.href = GAS_PM_WEB_APP_URL;
+                });
+            } else {
+                window.location.href = GAS_PM_WEB_APP_URL;
+            }
+        });
+
+        function startScanner() {
+            const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+            html5QrCode.start(
+                { facingMode: "environment" }, config,
+                (decodedText) => {
+                    if (html5QrCode.isScanning) {
+                        html5QrCode.stop().then(() => { onCodeScanned(decodedText); });
+                    }
+                },
+                (errorMessage) => {}
+            ).catch((err) => {
+                Swal.fire({ icon: 'error', title: 'เปิดกล้องไม่ได้', text: 'กรุณาอนุญาตใช้งานกล้อง' })
+                .then(() => { window.location.href = GAS_PM_WEB_APP_URL; });
+            });
+        }
+        
+        function onCodeScanned(data) {
+            Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'กำลังพากลับ...', timer: 1500, showConfirmButton: false, allowOutsideClick: false });
+            setTimeout(() => {
+                window.location.href = GAS_PM_WEB_APP_URL + "?tag=" + encodeURIComponent(data.trim());
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

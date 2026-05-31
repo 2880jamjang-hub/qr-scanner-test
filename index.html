@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบเบิกจ่าย Spare Part (Frontend)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+            --light-bg: #fafafa;
+            --border-color: #dbdbdb;
+            --text-color: #262626;
+            --text-secondary: #8e8e8e;
+            --white-color: #ffffff;
+            --green-color: #28a745;
+            --blue-color: #007bff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Kanit', sans-serif; background: var(--light-bg); display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 20px; color: var(--text-color); }
+        .container { max-width: 420px; width: 100%; background: var(--white-color); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
+        .header { padding: 20px; text-align: center; border-bottom: 1px solid var(--border-color); }
+        .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 5px; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .content-view { padding: 25px; text-align: center; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; font-family: 'Kanit', sans-serif; cursor: pointer; margin-top: 10px; }
+        .btn-main { background: var(--blue-color); color: var(--white-color); }
+        .btn-cancel { background-color: var(--text-secondary); color: white; margin-top: 20px; }
+        .hidden { display: none; }
+        #scanned-result { font-size: 18px; font-weight: 600; padding: 20px; border: 2px dashed var(--border-color); border-radius: 8px; margin-bottom: 20px; word-break: break-all; }
+        #scanned-result.not-scanned { color: var(--text-secondary); }
+        #scanned-result.scanned { color: var(--green-color); border-color: var(--green-color); background-color: #f8fff9; }
+        #video-container { width: 100%; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background-color: #000; }
+        #video { width: 100%; height: auto; display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="main-view">
+            <div class="header"><h1>📋 ทดสอบระบบสแกน</h1></div>
+            <div class="content-view">
+                <div id="scanned-result" class="not-scanned">ผลการสแกนจะแสดงที่นี่</div>
+                <button type="button" id="scanQrBtn" class="btn btn-main">📷 เปิดกล้องสแกน</button>
+            </div>
+        </div>
+
+        <div id="scanner-view" class="hidden">
+            <div class="header"><h1>📷 หันกล้องไปที่ QR Code</h1></div>
+            <div class="content-view">
+                <div id="video-container"><video id="video" playsinline autoplay muted></video></div>
+                <button type="button" id="cancelScanBtn" class="btn btn-cancel">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+    <canvas id="qr-canvas" class="hidden"></canvas>
+
+    <script>
+        // ใส่ URL Web App ของ Google Apps Script ของคุณที่นี่ (เมื่อพร้อมจะเชื่อมต่อฐานข้อมูล)
+        const SCRIPT_URL = "YOUR_GOOGLE_SCRIPT_WEB_APP_URL"; 
+
+        let videoStream = null, animationFrameId = null;
+        const video = document.getElementById('video');
+        const canvasElement = document.getElementById('qr-canvas');
+        const canvasContext = canvasElement.getContext('2d');
+        const mainView = document.getElementById('main-view');
+        const scannerView = document.getElementById('scanner-view');
+        const scannedResultDiv = document.getElementById('scanned-result');
+
+        document.getElementById('scanQrBtn').addEventListener('click', () => {
+            mainView.classList.add('hidden');
+            scannerView.classList.remove('hidden');
+            startScanner();
+        });
+
+        document.getElementById('cancelScanBtn').addEventListener('click', stopScanner);
+
+        function stopScanner() {
+            if (videoStream) videoStream.getTracks().forEach(track => track.stop());
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            videoStream = null; animationFrameId = null;
+            scannerView.classList.add('hidden');
+            mainView.classList.remove('hidden');
+        }
+
+        function startScanner() {
+            // ใช้ "environment" เพื่อบังคับกล้องหลัง (ในมือถือ) หรือกล้องเริ่มต้น (ใน PC)
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => {
+                videoStream = stream;
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    canvasElement.width = video.videoWidth;
+                    canvasElement.height = video.videoHeight;
+                    animationFrameId = requestAnimationFrame(tick);
+                };
+            }).catch(err => {
+                Swal.fire('ข้อผิดพลาด', `ไม่สามารถเปิดกล้องได้: ${err.message}`, 'error');
+                stopScanner();
+            });
+        }
+
+        function tick() {
+             if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvasContext.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+                const imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+                
+                if (code) {
+                    stopScanner();
+                    onQrCodeScanned(code.data);
+                    return; 
+                }
+            }
+            animationFrameId = requestAnimationFrame(tick);
+        }
+        
+        function onQrCodeScanned(data) {
+            scannedResultDiv.textContent = data;
+            scannedResultDiv.classList.remove('not-scanned');
+            scannedResultDiv.classList.add('scanned');
+            
+            Swal.fire({ icon: 'success', title: 'สแกนสำเร็จ!', text: `ข้อมูล: ${data}` });
+
+            // --- ส่วนนี้คือตัวอย่างการส่งข้อมูลไปให้ Google Apps Script เมื่อพร้อมเชื่อมต่อ ---
+            /*
+            Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: "scanLog", data: data })
+            })
+            .then(res => res.json())
+            .then(result => Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success'))
+            .catch(err => Swal.fire('เกิดข้อผิดพลาด', err.message, 'error'));
+            */
+        }
+    </script>
+</body>
+</html>

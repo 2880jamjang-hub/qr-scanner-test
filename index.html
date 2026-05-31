@@ -6,7 +6,8 @@
     <title>Scanner - FEEDER FIX MAP</title>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    
+    <script src="https://unpkg.com/html5-qrcode"></script>
     
     <style>
         :root {
@@ -20,68 +21,76 @@
         body { font-family: 'Kanit', sans-serif; background: var(--bg-color); display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 15px 10px; color: var(--text-main); }
         .app-container { max-width: 400px; width: 100%; }
         .top-card { background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); text-align: center; border-top: 5px solid var(--ig-blue); }
-        h1 { font-size: 20px; font-weight: 700; color: var(--ig-blue); margin-bottom: 15px; }
+        h1 { font-size: 20px; font-weight: 700; color: var(--ig-blue); margin-bottom: 5px; }
         p { font-size: 14px; color: var(--text-sub); margin-bottom: 20px; }
         
-        #video-container { width: 100%; border: 2px dashed var(--border-color); border-radius: 12px; overflow: hidden; background-color: #000; position: relative; margin-bottom: 15px; }
-        #video { width: 100%; height: 100%; display: block; object-fit: cover; aspect-ratio: 1/1; }
-        .scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: rgba(0, 149, 246, 0.8); box-shadow: 0 0 10px rgba(0, 149, 246, 0.8); animation: scan 2s linear infinite; }
-        @keyframes scan { 0% { top: 0%; } 100% { top: 100%; } }
+        /* ปรับแต่งกรอบสแกนใหม่ให้เข้ากับ html5-qrcode */
+        #reader { width: 100%; border: 2px dashed var(--border-color); border-radius: 12px; overflow: hidden; margin-bottom: 15px; background: #000; }
         
-        .btn-cancel { background: #f3f4f6; color: var(--text-main); border: none; border-radius: 8px; width: 100%; padding: 12px; font-size: 14px; font-weight: 600; font-family: 'Kanit', sans-serif; cursor: pointer; transition: 0.2s; }
+        .btn-cancel { background: #f3f4f6; color: var(--text-main); border: none; border-radius: 8px; width: 100%; padding: 12px; font-size: 14px; font-weight: 600; font-family: 'Kanit', sans-serif; cursor: pointer; transition: 0.2s; margin-top: 10px; }
         .btn-cancel:active { background: #e5e7eb; }
-        .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="app-container">
         <div class="top-card">
             <h1>📷 สแกน TAG NO.</h1>
-            <p>หันกล้องไปที่ QR Code ของ Feeder</p>
+            <p>รองรับทั้ง QR Code และ บาร์โค้ดแท่ง</p>
             
-            <div id="video-container">
-                <video id="video" playsinline autoplay muted></video>
-                <div class="scan-line"></div>
-            </div>
+            <div id="reader"></div>
             
             <button type="button" id="cancelBtn" class="btn-cancel">กลับไปหน้าหลัก</button>
         </div>
     </div>
-    
-    <canvas id="qr-canvas" class="hidden"></canvas>
 
     <script>
         // ลิงก์ Web App หลักของ Google Apps Script
         const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzR_IBCyKZ71fSv9KCJEy25R-s70uk4I1HcwcNA1kcwCBHICBv-yIsHrMFMGkeJCEVD/exec";
         
-        let videoStream = null;
-        let animationFrameId = null;
-        let isScanned = false; // ป้องกันการสแกนซ้ำรัวๆ
+        let html5QrCode;
 
-        const video = document.getElementById('video');
-        const canvasElement = document.getElementById('qr-canvas');
-        const canvasContext = canvasElement.getContext('2d', { willReadFrequently: true });
-
-        // เริ่มกล้องทันทีที่เปิดหน้าเว็บ
-        window.addEventListener('DOMContentLoaded', startScanner);
+        window.addEventListener('DOMContentLoaded', () => {
+            // ผูกไลบรารีเข้ากับ div ที่มี id="reader"
+            html5QrCode = new Html5Qrcode("reader");
+            startScanner();
+        });
         
-        // กดปุ่มยกเลิกพากลับไปหน้า GAS เปล่าๆ
+        // ฟังก์ชันสำหรับปุ่ม "กลับไปหน้าหลัก"
         document.getElementById('cancelBtn').addEventListener('click', () => {
-            stopScanner();
-            window.location.href = GAS_WEB_APP_URL;
+            if (html5QrCode && html5QrCode.isScanning) {
+                // ปิดกล้องก่อน แล้วเด้งกลับ GAS แบบคลีนๆ ไม่มีพารามิเตอร์
+                html5QrCode.stop().then(() => {
+                    window.location.href = GAS_WEB_APP_URL; 
+                }).catch(err => {
+                    window.location.href = GAS_WEB_APP_URL;
+                });
+            } else {
+                window.location.href = GAS_WEB_APP_URL;
+            }
         });
 
         function startScanner() {
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => {
-                videoStream = stream;
-                video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    canvasElement.width = video.videoWidth;
-                    canvasElement.height = video.videoHeight;
-                    animationFrameId = requestAnimationFrame(tick);
-                };
-            }).catch(err => {
+            // ตั้งค่ากรอบสแกนเป็นแนวนอน (250x150) เพื่อให้สแกนบาร์โค้ดแท่งได้แม่นยำขึ้น
+            const config = { 
+                fps: 10, 
+                qrbox: { width: 250, height: 150 } 
+            };
+
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText, decodedResult) => {
+                    // เมื่อสแกนเจอทั้งบาร์โค้ดหรือ QR Code จะทำงานตรงนี้
+                    if (html5QrCode.isScanning) {
+                        html5QrCode.stop().then(() => {
+                            onCodeScanned(decodedText);
+                        });
+                    }
+                },
+                (errorMessage) => {
+                    // ปล่อยว่างไว้: ซ่อน Error ระหว่างที่กล้องกำลังพยายามโฟกัสหาบาร์โค้ด
+                }
+            ).catch((err) => {
                 Swal.fire({
                     icon: 'error',
                     title: 'เปิดกล้องไม่ได้',
@@ -91,34 +100,8 @@
                 });
             });
         }
-
-        function tick() {
-            if (isScanned) return; // ถ้าสแกนติดแล้วให้หยุดวนลูป
-
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvasContext.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
-                const imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
-                
-                const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: "attemptBoth",
-                });
-                
-                if (code && code.data) {
-                    isScanned = true;
-                    stopScanner();
-                    onQrCodeScanned(code.data);
-                    return; 
-                }
-            }
-            animationFrameId = requestAnimationFrame(tick);
-        }
-
-        function stopScanner() {
-            if (videoStream) videoStream.getTracks().forEach(track => track.stop());
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        }
         
-        function onQrCodeScanned(data) {
+        function onCodeScanned(data) {
             Swal.fire({ 
                 icon: 'success', 
                 title: 'อ่าน Tag สำเร็จ!', 
@@ -128,7 +111,7 @@
                 allowOutsideClick: false
             });
 
-            // รอ 1.5 วิ แล้วพาเด้งกลับไปที่ GAS พร้อมส่งพารามิเตอร์ ?tag=...
+            // รอ 1.5 วิ แล้วพาเด้งกลับไปที่ GAS พร้อมแนบค่าพารามิเตอร์ ?tag=...
             setTimeout(() => {
                 window.location.href = GAS_WEB_APP_URL + "?tag=" + encodeURIComponent(data.trim());
             }, 1500);

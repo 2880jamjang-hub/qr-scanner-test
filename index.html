@@ -23,7 +23,7 @@
         h1 { font-size: 20px; font-weight: 700; color: var(--ig-blue); margin-bottom: 5px; }
         p { font-size: 14px; color: var(--text-sub); margin-bottom: 20px; }
         
-        /* ปรับกรอบสแกนให้เป็นสี่เหลี่ยมจัตุรัสรับกับ QR Code */
+        /* ปรับแต่งกรอบสแกน */
         #reader { width: 100%; border: 2px dashed var(--border-color); border-radius: 12px; overflow: hidden; margin-bottom: 15px; background: #000; }
         
         .btn-cancel { background: #f3f4f6; color: var(--text-main); border: none; border-radius: 8px; width: 100%; padding: 12px; font-size: 14px; font-weight: 600; font-family: 'Kanit', sans-serif; cursor: pointer; transition: 0.2s; margin-top: 10px; }
@@ -49,7 +49,7 @@
         let html5QrCode;
 
         window.addEventListener('DOMContentLoaded', () => {
-            // ประกาศใช้งาน Scanner โดยกำหนดให้รองรับเฉพาะ QR_CODE เท่านั้น
+            // ประกาศใช้งาน Scanner โดยกำหนดให้รองรับเฉพาะ QR_CODE เพื่อให้ประมวลผลไวขึ้น
             html5QrCode = new Html5Qrcode("reader", {
                 formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ]
             });
@@ -70,21 +70,15 @@
         });
 
         function startScanner() {
-            // ปรับกรอบสแกนเป็นสี่เหลี่ยมจัตุรัส (250x250)
+            // ปรับกรอบโฟกัสสแกนเป็นสี่เหลี่ยมจัตุรัส (250x250) ให้พอดีกับ QR Code
             const config = { 
-                fps: 15, // เพิ่ม Frame rate เล็กน้อยให้จับภาพได้ลื่นขึ้น
+                fps: 15, 
                 qrbox: { width: 250, height: 250 } 
             };
 
-            // บังคับการตั้งค่ากล้องให้ใช้กล้องหลัง และพยายามดันความละเอียดภาพให้ชัดขึ้น
-            const cameraConstraints = { 
-                facingMode: "environment",
-                width: { ideal: 1280 },  // ขอความละเอียด HD เป็นอย่างน้อย
-                height: { ideal: 720 }
-            };
-
+            // เรียกใช้กล้องหลังเป็นหลัก แต่ไม่บังคับความละเอียด เพื่อป้องกัน Error บน PC
             html5QrCode.start(
-                cameraConstraints,
+                { facingMode: "environment" },
                 config,
                 (decodedText, decodedResult) => {
                     // เมื่อสแกนเจอ QR Code
@@ -95,7 +89,7 @@
                     }
                 },
                 (errorMessage) => {
-                    // ซ่อน Error ระหว่างที่กล้องกำลังพยายามโฟกัส
+                    // ปล่อยว่างไว้: ซ่อน Error แจ้งเตือนจุกจิกเวลาที่กล้องกำลังพยายามหาโฟกัส
                 }
             ).catch((err) => {
                 Swal.fire({
@@ -118,7 +112,7 @@
                 allowOutsideClick: false
             });
 
-            // รอ 1.5 วิ แล้วพาเด้งกลับไปที่ GAS
+            // รอ 1.5 วิ แล้วพาเด้งกลับไปที่ GAS พร้อมแนบค่าพารามิเตอร์
             setTimeout(() => {
                 window.location.href = GAS_WEB_APP_URL + "?tag=" + encodeURIComponent(data.trim());
             }, 1500);

@@ -6,7 +6,6 @@
     <title>Scanner - FEEDER FIX MAP</title>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    
     <script src="https://unpkg.com/html5-qrcode"></script>
     
     <style>
@@ -24,7 +23,7 @@
         h1 { font-size: 20px; font-weight: 700; color: var(--ig-blue); margin-bottom: 5px; }
         p { font-size: 14px; color: var(--text-sub); margin-bottom: 20px; }
         
-        /* ปรับแต่งกรอบสแกนใหม่ให้เข้ากับ html5-qrcode */
+        /* ปรับกรอบสแกนให้เป็นสี่เหลี่ยมจัตุรัสรับกับ QR Code */
         #reader { width: 100%; border: 2px dashed var(--border-color); border-radius: 12px; overflow: hidden; margin-bottom: 15px; background: #000; }
         
         .btn-cancel { background: #f3f4f6; color: var(--text-main); border: none; border-radius: 8px; width: 100%; padding: 12px; font-size: 14px; font-weight: 600; font-family: 'Kanit', sans-serif; cursor: pointer; transition: 0.2s; margin-top: 10px; }
@@ -34,8 +33,8 @@
 <body>
     <div class="app-container">
         <div class="top-card">
-            <h1>📷 สแกน TAG NO.</h1>
-            <p>รองรับทั้ง QR Code และ บาร์โค้ดแท่ง</p>
+            <h1>📷 สแกน QR CODE</h1>
+            <p>สแกน QR บนอุปกรณ์เพื่อบันทึกข้อมูล</p>
             
             <div id="reader"></div>
             
@@ -50,15 +49,16 @@
         let html5QrCode;
 
         window.addEventListener('DOMContentLoaded', () => {
-            // ผูกไลบรารีเข้ากับ div ที่มี id="reader"
-            html5QrCode = new Html5Qrcode("reader");
+            // ประกาศใช้งาน Scanner โดยกำหนดให้รองรับเฉพาะ QR_CODE เท่านั้น
+            html5QrCode = new Html5Qrcode("reader", {
+                formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ]
+            });
             startScanner();
         });
         
         // ฟังก์ชันสำหรับปุ่ม "กลับไปหน้าหลัก"
         document.getElementById('cancelBtn').addEventListener('click', () => {
             if (html5QrCode && html5QrCode.isScanning) {
-                // ปิดกล้องก่อน แล้วเด้งกลับ GAS แบบคลีนๆ ไม่มีพารามิเตอร์
                 html5QrCode.stop().then(() => {
                     window.location.href = GAS_WEB_APP_URL; 
                 }).catch(err => {
@@ -70,17 +70,24 @@
         });
 
         function startScanner() {
-            // ตั้งค่ากรอบสแกนเป็นแนวนอน (250x150) เพื่อให้สแกนบาร์โค้ดแท่งได้แม่นยำขึ้น
+            // ปรับกรอบสแกนเป็นสี่เหลี่ยมจัตุรัส (250x250)
             const config = { 
-                fps: 10, 
-                qrbox: { width: 250, height: 150 } 
+                fps: 15, // เพิ่ม Frame rate เล็กน้อยให้จับภาพได้ลื่นขึ้น
+                qrbox: { width: 250, height: 250 } 
+            };
+
+            // บังคับการตั้งค่ากล้องให้ใช้กล้องหลัง และพยายามดันความละเอียดภาพให้ชัดขึ้น
+            const cameraConstraints = { 
+                facingMode: "environment",
+                width: { ideal: 1280 },  // ขอความละเอียด HD เป็นอย่างน้อย
+                height: { ideal: 720 }
             };
 
             html5QrCode.start(
-                { facingMode: "environment" },
+                cameraConstraints,
                 config,
                 (decodedText, decodedResult) => {
-                    // เมื่อสแกนเจอทั้งบาร์โค้ดหรือ QR Code จะทำงานตรงนี้
+                    // เมื่อสแกนเจอ QR Code
                     if (html5QrCode.isScanning) {
                         html5QrCode.stop().then(() => {
                             onCodeScanned(decodedText);
@@ -88,7 +95,7 @@
                     }
                 },
                 (errorMessage) => {
-                    // ปล่อยว่างไว้: ซ่อน Error ระหว่างที่กล้องกำลังพยายามโฟกัสหาบาร์โค้ด
+                    // ซ่อน Error ระหว่างที่กล้องกำลังพยายามโฟกัส
                 }
             ).catch((err) => {
                 Swal.fire({
@@ -111,7 +118,7 @@
                 allowOutsideClick: false
             });
 
-            // รอ 1.5 วิ แล้วพาเด้งกลับไปที่ GAS พร้อมแนบค่าพารามิเตอร์ ?tag=...
+            // รอ 1.5 วิ แล้วพาเด้งกลับไปที่ GAS
             setTimeout(() => {
                 window.location.href = GAS_WEB_APP_URL + "?tag=" + encodeURIComponent(data.trim());
             }, 1500);

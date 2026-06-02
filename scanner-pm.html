@@ -5,7 +5,7 @@
     <title>Scanner - PM Record</title>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://unpkg.com/qr-scanner/qr-scanner.umd.min.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
     
     <style>
         :root {
@@ -41,28 +41,6 @@
 
         #qr-video { width: 100%; height: 100%; object-fit: cover; }
         
-        .controls { display: flex; gap: 10px; margin-bottom: 20px; }
-        
-        /* ปุ่ม Action สำหรับซูมและไฟฉาย ปรับให้เข้ากับธีมของ scanner-pm */
-        .btn-action { 
-            background-color: #ffffff; 
-            color: #5A85A3; 
-            box-shadow: 4px 4px 10px #c5d0e0, -4px -4px 10px #ffffff; 
-            border: none; 
-            border-radius: 15px; 
-            flex: 1; 
-            padding: 12px; 
-            font-size: 14px; 
-            font-weight: 600; 
-            font-family: 'Kanit', sans-serif; 
-            cursor: pointer; 
-            transition: 0.2s; 
-        }
-        .btn-action:active { 
-            transform: scale(0.97); 
-            box-shadow: inset 4px 4px 10px #c5d0e0, inset -4px -4px 10px #ffffff; 
-        }
-        
         .btn-cancel { background-color: var(--clay-blue); color: #5A85A3; box-shadow: 6px 6px 12px #A6C8E0, -6px -6px 12px #D2FCFF; border: none; border-radius: 20px; width: 100%; padding: 14px; font-size: 15px; font-weight: 600; font-family: 'Kanit', sans-serif; cursor: pointer; transition: 0.2s; }
         .btn-cancel:active { transform: scale(0.97); }
     </style>
@@ -71,15 +49,10 @@
     <div class="app-container">
         <div class="top-card">
             <h1>📷 สแกนข้อมูล PM</h1>
-            <p>ถอยกล้องห่างนิดนึง แล้วกดเปลี่ยนระยะซูมเพื่อสแกน</p>
+            <p>ระบบจะซูมภาพ 3x อัตโนมัติ</p>
             
             <div class="video-wrapper">
-                <video id="qr-video"></video>
-            </div>
-            
-            <div class="controls">
-                <button type="button" id="zoomBtn" class="btn-action">🔍 ซูม: 1x</button>
-                <button type="button" id="torchBtn" class="btn-action">🔦 เปิดไฟฉาย</button>
+                <video id="qr-video" playsinline></video>
             </div>
             
             <button type="button" id="cancelBtn" class="btn-cancel">กลับไปหน้าหลัก</button>
@@ -89,10 +62,8 @@
     <script>
         const GAS_PM_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbycnmviYXG6PBE2kfYsmseRHdxdXImnU5zFaA-Y-LJDvMAqgjtts1GjtzICstZqyjRvBw/exec"; 
         
-        let qrScanner;
+        let codeReader;
         let videoTrack = null;
-        const zoomLevels = [1, 2.5, 3];
-        let currentZoomIndex = 0; 
         
         const videoElem = document.getElementById('qr-video');
 
@@ -114,29 +85,39 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            qrScanner = new QrScanner(
-                videoElem,
-                result => {
-                    qrScanner.stop(); 
+            codeReader = new ZXing.BrowserMultiFormatReader();
+            
+            const constraints = {
+                video: { facingMode: "environment" }
+            };
+
+            codeReader.decodeFromConstraints(constraints, videoElem, (result, err) => {
+                if (result) {
+                    codeReader.reset(); 
                     if (navigator.vibrate) navigator.vibrate(200);
                     playBeep();
                     document.body.classList.add('scan-success');
                     setTimeout(() => { document.body.classList.remove('scan-success'); }, 300);
-                    onCodeScanned(result.data);
-                },
-                {
-                    highlightScanRegion: true,
-                    highlightCodeOutline: true,
-                    returnDetailedScanResult: true,
-                    preferredCamera: 'environment' // บังคับกล้องหลัง
+                    onCodeScanned(result.getText());
                 }
-            );
-
-            qrScanner.start().then(() => {
+            }).then(() => {
                 setTimeout(() => {
                     const stream = videoElem.srcObject;
                     if (stream) {
                         videoTrack = stream.getVideoTracks()[0];
+                        
+                        // บังคับซูม 3x อัตโนมัติเมื่อเปิดกล้อง
+                        const capabilities = videoTrack.getCapabilities();
+                        if (capabilities && 'zoom' in capabilities) {
+                            const maxZoom = capabilities.zoom.max || 1;
+                            const targetZoom = Math.min(3, maxZoom); 
+                            
+                            videoTrack.applyConstraints({
+                                advanced: [{ zoom: targetZoom }]
+                            }).catch(err => {
+                                console.error("เปลี่ยนระยะซูมล้มเหลว:", err);
+                            });
+                        }
                     }
                 }, 500);
             }).catch((err) => {
@@ -150,57 +131,8 @@
             });
         });
 
-        document.getElementById('zoomBtn').addEventListener('click', () => {
-            if (!videoTrack) {
-                Swal.fire('ไม่พร้อม', 'กล้องยังไม่พร้อมใช้งาน', 'info');
-                return;
-            }
-            
-            const capabilities = videoTrack.getCapabilities();
-            if (capabilities && 'zoom' in capabilities) {
-                const maxZoom = capabilities.zoom.max || 1;
-                
-                currentZoomIndex = (currentZoomIndex + 1) % zoomLevels.length;
-                let targetZoom = zoomLevels[currentZoomIndex];
-                
-                if (targetZoom > maxZoom) {
-                    currentZoomIndex = 0;
-                    targetZoom = zoomLevels[currentZoomIndex];
-                    Swal.fire({
-                        icon: 'info',
-                        title: 'ข้อจำกัดฮาร์ดแวร์',
-                        text: `กล้องของคุณซูมได้สูงสุด ${maxZoom}x ระบบจึงวนกลับไปที่ 1x`,
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                }
-                
-                videoTrack.applyConstraints({
-                    advanced: [{ zoom: targetZoom }]
-                }).then(() => {
-                    document.getElementById('zoomBtn').innerHTML = `🔍 ซูม: ${targetZoom}x`;
-                }).catch(err => {
-                    console.error("เปลี่ยนระยะซูมล้มเหลว:", err);
-                });
-            } else {
-                Swal.fire('ไม่รองรับ', 'มือถือรุ่นนี้ไม่รองรับคำสั่งควบคุมระยะซูมผ่านหน้าเว็บ', 'warning');
-            }
-        });
-
-        document.getElementById('torchBtn').addEventListener('click', () => {
-            if(qrScanner) {
-                qrScanner.hasFlash().then(hasFlash => {
-                    if(hasFlash) {
-                        qrScanner.toggleFlash();
-                    } else {
-                        Swal.fire('ไม่รองรับ', 'มือถือรุ่นนี้ไม่รองรับการเปิดไฟฉายผ่านเว็บไซต์', 'warning');
-                    }
-                });
-            }
-        });
-
         document.getElementById('cancelBtn').addEventListener('click', () => {
-            if (qrScanner) qrScanner.stop();
+            if (codeReader) codeReader.reset();
             window.location.href = GAS_PM_WEB_APP_URL;
         });
         

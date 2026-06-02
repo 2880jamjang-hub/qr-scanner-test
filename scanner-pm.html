@@ -5,7 +5,8 @@
     <title>Scanner - PM Record</title>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script type="text/javascript" src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+    
+    <script src="https://unpkg.com/qr-scanner/qr-scanner.umd.min.js"></script>
     
     <style>
         :root {
@@ -33,7 +34,7 @@
             background: #000;
             margin-bottom: 20px;
             border: 2px dashed var(--border-color);
-            aspect-ratio: 3 / 4; /* ปรับเป็น 3:4 */
+            aspect-ratio: 3 / 4; 
             display: flex;
             align-items: center;
             justify-content: center;
@@ -52,7 +53,7 @@
             <p>ระบบจะซูมภาพ 3x อัตโนมัติ</p>
             
             <div class="video-wrapper">
-                <video id="qr-video" playsinline></video>
+                <video id="qr-video"></video>
             </div>
             
             <button type="button" id="cancelBtn" class="btn-cancel">กลับไปหน้าหลัก</button>
@@ -62,7 +63,7 @@
     <script>
         const GAS_PM_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbycnmviYXG6PBE2kfYsmseRHdxdXImnU5zFaA-Y-LJDvMAqgjtts1GjtzICstZqyjRvBw/exec"; 
         
-        let codeReader;
+        let qrScanner;
         let videoTrack = null;
         
         const videoElem = document.getElementById('qr-video');
@@ -85,28 +86,31 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            codeReader = new ZXing.BrowserMultiFormatReader();
-            
-            const constraints = {
-                video: { facingMode: "environment" }
-            };
-
-            codeReader.decodeFromConstraints(constraints, videoElem, (result, err) => {
-                if (result) {
-                    codeReader.reset(); 
+            qrScanner = new QrScanner(
+                videoElem,
+                result => {
+                    qrScanner.stop(); 
                     if (navigator.vibrate) navigator.vibrate(200);
                     playBeep();
                     document.body.classList.add('scan-success');
                     setTimeout(() => { document.body.classList.remove('scan-success'); }, 300);
-                    onCodeScanned(result.getText());
+                    onCodeScanned(result.data);
+                },
+                {
+                    highlightScanRegion: true,     // เปิดกรอบพื้นที่สแกน
+                    highlightCodeOutline: true,    // เปิดเส้นวิ่งตามขอบ QR Code
+                    returnDetailedScanResult: true,
+                    preferredCamera: 'environment'
                 }
-            }).then(() => {
+            );
+
+            qrScanner.start().then(() => {
+                // รอให้กล้องพร้อมแล้วค่อยสั่งซูม
                 setTimeout(() => {
                     const stream = videoElem.srcObject;
                     if (stream) {
                         videoTrack = stream.getVideoTracks()[0];
                         
-                        // บังคับซูม 3x อัตโนมัติเมื่อเปิดกล้อง
                         const capabilities = videoTrack.getCapabilities();
                         if (capabilities && 'zoom' in capabilities) {
                             const maxZoom = capabilities.zoom.max || 1;
@@ -132,7 +136,7 @@
         });
 
         document.getElementById('cancelBtn').addEventListener('click', () => {
-            if (codeReader) codeReader.reset();
+            if (qrScanner) qrScanner.stop();
             window.location.href = GAS_PM_WEB_APP_URL;
         });
         

@@ -20,10 +20,13 @@
         
         body.scan-success { background-color: #00E676 !important; }
 
-        .app-container { max-width: 400px; width: 100%; }
-        .top-card { background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); text-align: center; border-top: 5px solid var(--ig-blue); }
-        h1 { font-size: 20px; font-weight: 700; color: var(--ig-blue); margin-bottom: 5px; }
-        p { font-size: 14px; color: var(--text-sub); margin-bottom: 15px; }
+        /* ปรับขนาดแอปเป็น 200px ตามที่ต้องการ */
+        .app-container { max-width: 200px; width: 100%; }
+        .top-card { background: #ffffff; border-radius: 12px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); text-align: center; border-top: 5px solid var(--ig-blue); }
+        
+        /* ปรับขนาดฟอนต์ให้เล็กลงเพื่อให้พอดีกับความกว้าง 200px */
+        h1 { font-size: 16px; font-weight: 700; color: var(--ig-blue); margin-bottom: 5px; }
+        p { font-size: 12px; color: var(--text-sub); margin-bottom: 12px; line-height: 1.4; }
         
         .video-wrapper {
             position: relative;
@@ -41,13 +44,8 @@
 
         #qr-video { width: 100%; height: 100%; object-fit: cover; }
         
-        .controls { display: flex; gap: 10px; margin-bottom: 15px; }
-        
-        .btn { border: none; border-radius: 8px; width: 100%; padding: 12px; font-size: 14px; font-weight: 600; font-family: 'Kanit', sans-serif; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 5px; }
+        .btn { border: none; border-radius: 8px; width: 100%; padding: 10px; font-size: 12px; font-weight: 600; font-family: 'Kanit', sans-serif; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; }
         .btn:active { transform: scale(0.98); }
-        
-        .btn-action { background: #e0f2fe; color: var(--ig-blue); flex: 1; border: 1px solid #bae6fd;}
-        .btn-action:active { background: #bae6fd; }
         
         .btn-cancel { background: #f3f4f6; color: var(--text-main); }
         .btn-cancel:active { background: #e5e7eb; }
@@ -57,15 +55,10 @@
     <div class="app-container">
         <div class="top-card">
             <h1>📷 สแกน QR CODE</h1>
-            <p>ถอยกล้องห่างนิดนึง แล้วกดเปลี่ยนระยะซูมเพื่อสแกน</p>
+            <p>ระบบจะซูมภาพ 3x อัตโนมัติ</p>
             
             <div class="video-wrapper">
                 <video id="qr-video"></video>
-            </div>
-            
-            <div class="controls">
-                <button type="button" id="zoomBtn" class="btn btn-action">🔍 ซูม: 1x</button>
-                <button type="button" id="torchBtn" class="btn btn-action">🔦 เปิดไฟฉาย</button>
             </div>
             
             <button type="button" id="cancelBtn" class="btn btn-cancel">กลับไปหน้าหลัก</button>
@@ -77,10 +70,6 @@
         
         let qrScanner;
         let videoTrack = null;
-        
-        // กำหนดระดับการซูมที่จะให้วนลูป (1x -> 2.5x -> 3x)
-        const zoomLevels = [1, 2.5, 3];
-        let currentZoomIndex = 0; 
         
         const videoElem = document.getElementById('qr-video');
 
@@ -125,6 +114,20 @@
                     const stream = videoElem.srcObject;
                     if (stream) {
                         videoTrack = stream.getVideoTracks()[0];
+                        
+                        // บังคับซูม 3x อัตโนมัติเมื่อเปิดกล้อง
+                        const capabilities = videoTrack.getCapabilities();
+                        if (capabilities && 'zoom' in capabilities) {
+                            const maxZoom = capabilities.zoom.max || 1;
+                            // เลือกค่าซูมที่ 3x หรือค่าสูงสุดที่กล้องทำได้ (ป้องกันการขอซูมเกินจริง)
+                            const targetZoom = Math.min(3, maxZoom); 
+                            
+                            videoTrack.applyConstraints({
+                                advanced: [{ zoom: targetZoom }]
+                            }).catch(err => {
+                                console.error("เปลี่ยนระยะซูมล้มเหลว:", err);
+                            });
+                        }
                     }
                 }, 500);
             }).catch((err) => {
@@ -134,60 +137,6 @@
                     text: 'กรุณาตรวจสอบสิทธิ์การใช้กล้อง'
                 });
             });
-        });
-
-        // ฟังก์ชันกดปุ่มเพื่อวนระยะซูม 1x -> 2.5x -> 3x
-        document.getElementById('zoomBtn').addEventListener('click', () => {
-            if (!videoTrack) {
-                Swal.fire('ไม่พร้อม', 'กล้องยังไม่พร้อมใช้งาน', 'info');
-                return;
-            }
-            
-            const capabilities = videoTrack.getCapabilities();
-            if (capabilities && 'zoom' in capabilities) {
-                const maxZoom = capabilities.zoom.max || 1;
-                
-                // วนลูปดัชนีของระยะซูม [1, 2.5, 3]
-                currentZoomIndex = (currentZoomIndex + 1) % zoomLevels.length;
-                let targetZoom = zoomLevels[currentZoomIndex];
-                
-                // ตรวจสอบไม่ให้เกินระยะซูมสูงสุดของกล้องเครื่องนั้นๆ
-                if (targetZoom > maxZoom) {
-                    // ถ้าเครื่องนั้นซูมได้ไม่ถึงระดับที่เลือก ให้ข้ามกลับไปเริ่มต้นที่ 1x
-                    currentZoomIndex = 0;
-                    targetZoom = zoomLevels[currentZoomIndex];
-                    Swal.fire({
-                        icon: 'info',
-                        title: 'ข้อจำกัดฮาร์ดแวร์',
-                        text: `กล้องของคุณซูมได้สูงสุด ${maxZoom}x ระบบจึงวนกลับไปที่ 1x`,
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                }
-                
-                videoTrack.applyConstraints({
-                    advanced: [{ zoom: targetZoom }]
-                }).then(() => {
-                    document.getElementById('zoomBtn').innerHTML = `🔍 ซูม: ${targetZoom}x`;
-                }).catch(err => {
-                    console.error("เปลี่ยนระยะซูมล้มเหลว:", err);
-                });
-            } else {
-                Swal.fire('ไม่รองรับ', 'มือถือรุ่นนี้ไม่รองรับคำสั่งควบคุมระยะซูมผ่านหน้าเว็บ', 'warning');
-            }
-        });
-
-        // ฟังก์ชันควบคุมไฟฉาย
-        document.getElementById('torchBtn').addEventListener('click', () => {
-            if(qrScanner) {
-                qrScanner.hasFlash().then(hasFlash => {
-                    if(hasFlash) {
-                        qrScanner.toggleFlash();
-                    } else {
-                        Swal.fire('ไม่รองรับ', 'มือถือรุ่นนี้ไม่รองรับการเปิดไฟฉายผ่านเว็บไซต์', 'warning');
-                    }
-                });
-            }
         });
 
         document.getElementById('cancelBtn').addEventListener('click', () => {

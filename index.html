@@ -35,7 +35,8 @@
             background: #000;
             margin-bottom: 15px;
             border: 2px dashed var(--border-color);
-            aspect-ratio: 1 / 1; 
+            /* ปรับเป็นสัดส่วน 3:4 ให้สอดคล้องกับเลนส์กล้องมือถือ เพื่อลดการถูกตัดขอบภาพและทำให้ภาพดูใหญ่ขึ้น */
+            aspect-ratio: 3 / 4; 
             display: flex;
             align-items: center;
             justify-content: center;
@@ -113,7 +114,8 @@
                 {
                     highlightScanRegion: true,
                     highlightCodeOutline: true,
-                    returnDetailedScanResult: true
+                    returnDetailedScanResult: true,
+                    preferredCamera: 'environment' // บังคับให้ระบบเลือกใช้กล้องหลังตัวหลัก ลดปัญหามือถือสุ่มไปเปิดเลนส์มุมกว้าง (Wide) ตัวอื่น
                 }
             );
 

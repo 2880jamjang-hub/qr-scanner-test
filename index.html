@@ -57,14 +57,14 @@
     <div class="app-container">
         <div class="top-card">
             <h1>📷 สแกน QR CODE</h1>
-            <p>ถอยกล้องห่างนิดนึง แล้วกดปุ่มซูมเพื่อสแกน</p>
+            <p>ถอยกล้องห่างนิดนึง แล้วกดเปลี่ยนระยะซูมเพื่อสแกน</p>
             
             <div class="video-wrapper">
                 <video id="qr-video"></video>
             </div>
             
             <div class="controls">
-                <button type="button" id="zoomBtn" class="btn btn-action">🔍 ซูม 2.5x</button>
+                <button type="button" id="zoomBtn" class="btn btn-action">🔍 ซูม: 1x</button>
                 <button type="button" id="torchBtn" class="btn btn-action">🔦 เปิดไฟฉาย</button>
             </div>
             
@@ -76,8 +76,12 @@
         const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzR_IBCyKZ71fSv9KCJEy25R-s70uk4I1HcwcNA1kcwCBHICBv-yIsHrMFMGkeJCEVD/exec";
         
         let qrScanner;
-        let currentZoom = 1;
         let videoTrack = null;
+        
+        // กำหนดระดับการซูมที่จะให้วนลูป (1x -> 2.5x -> 3x)
+        const zoomLevels = [1, 2.5, 3];
+        let currentZoomIndex = 0; 
+        
         const videoElem = document.getElementById('qr-video');
 
         function playBeep() {
@@ -132,7 +136,7 @@
             });
         });
 
-        // ฟังก์ชันควบคุมการซูมด้วยปุ่มกด
+        // ฟังก์ชันกดปุ่มเพื่อวนระยะซูม 1x -> 2.5x -> 3x
         document.getElementById('zoomBtn').addEventListener('click', () => {
             if (!videoTrack) {
                 Swal.fire('ไม่พร้อม', 'กล้องยังไม่พร้อมใช้งาน', 'info');
@@ -143,22 +147,33 @@
             if (capabilities && 'zoom' in capabilities) {
                 const maxZoom = capabilities.zoom.max || 1;
                 
-                // สลับค่าระหว่าง 1x และ 2.5x (หรือค่าสูงสุดที่กล้องทำได้)
-                if (currentZoom === 1) {
-                    currentZoom = Math.min(2.5, maxZoom);
-                } else {
-                    currentZoom = 1;
+                // วนลูปดัชนีของระยะซูม [1, 2.5, 3]
+                currentZoomIndex = (currentZoomIndex + 1) % zoomLevels.length;
+                let targetZoom = zoomLevels[currentZoomIndex];
+                
+                // ตรวจสอบไม่ให้เกินระยะซูมสูงสุดของกล้องเครื่องนั้นๆ
+                if (targetZoom > maxZoom) {
+                    // ถ้าเครื่องนั้นซูมได้ไม่ถึงระดับที่เลือก ให้ข้ามกลับไปเริ่มต้นที่ 1x
+                    currentZoomIndex = 0;
+                    targetZoom = zoomLevels[currentZoomIndex];
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'ข้อจำกัดฮาร์ดแวร์',
+                        text: `กล้องของคุณซูมได้สูงสุด ${maxZoom}x ระบบจึงวนกลับไปที่ 1x`,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
                 }
                 
                 videoTrack.applyConstraints({
-                    advanced: [{ zoom: currentZoom }]
+                    advanced: [{ zoom: targetZoom }]
                 }).then(() => {
-                    document.getElementById('zoomBtn').innerHTML = currentZoom > 1 ? "🔍 ลดซูม (1x)" : "🔍 ซูม 2.5x";
+                    document.getElementById('zoomBtn').innerHTML = `🔍 ซูม: ${targetZoom}x`;
                 }).catch(err => {
-                    console.error(err);
+                    console.error("เปลี่ยนระยะซูมล้มเหลว:", err);
                 });
             } else {
-                Swal.fire('ไม่รองรับ', 'มือถือรุ่นนี้ไม่รองรับคำสั่งซูมผ่านเว็บไซต์', 'warning');
+                Swal.fire('ไม่รองรับ', 'มือถือรุ่นนี้ไม่รองรับคำสั่งควบคุมระยะซูมผ่านหน้าเว็บ', 'warning');
             }
         });
 
